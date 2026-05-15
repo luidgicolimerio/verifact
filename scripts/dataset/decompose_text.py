@@ -205,7 +205,8 @@ def build_nodes_from_document(
 
         # Semantic Nodes --> Atomic Claim Nodes
         loop = asyncio.get_event_loop()
-        llm = get_llm(temperature=llm_temperature, top_p=llm_top_p)
+        from rag.components import get_azure_llm
+        llm = get_azure_llm(temperature=llm_temperature)
         atomic_claim_node_parser: AtomicClaimNodeParser = get_atomic_claim_node_parser(
             num_workers=llm_n_jobs, llm=llm
         )

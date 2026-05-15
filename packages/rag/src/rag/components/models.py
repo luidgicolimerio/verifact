@@ -6,6 +6,7 @@ import os
 from llama_index.core.schema import MetadataMode
 
 from rag.embedding import M3Embedding
+from rag.llms.azure_openai import AzureOpenAILLM
 from rag.llms.openai_like import OpenAILike
 from rag.postprocessor import M3Reranker
 
@@ -15,6 +16,56 @@ DEFAULT_SYSTEM_PROMPT = (
     "You are a physician taking care of patients with expert knowledge of medical conditions "
     "and treatment options."
 )
+
+
+def get_azure_llm(
+    model_name: str = "gpt-4o-mini",
+    deployment_name: str = "gpt-4o-mini",
+    azure_endpoint: str | None = None,
+    api_key: str | None = None,
+    api_version: str = "2024-12-01-preview",
+    context_window: int | None = None,
+    max_completion_tokens: int | None = None,
+    system_prompt: str = DEFAULT_SYSTEM_PROMPT,
+    temperature: float = 0.7,
+    top_p: float = 1.0,
+    **kwargs,
+) -> AzureOpenAILLM:
+    """Get Azure OpenAI LLM object.
+    
+    Args:
+        model_name (str): Azure OpenAI model name (e.g., "gpt-4o-mini").
+        deployment_name (str): Azure OpenAI deployment name.
+        azure_endpoint (str | None): Azure OpenAI endpoint URL. If None, uses AZURE_URL env var.
+        api_key (str | None): Azure OpenAI API key. If None, uses AZURE_API_KEY env var.
+        api_version (str): Azure OpenAI API version.
+        context_window (int | None): Maximum context window for the model.
+        max_completion_tokens (int | None): Maximum completion tokens.
+        system_prompt (str): System prompt for the model.
+        temperature (float): Temperature for sampling.
+        top_p (float): Top-p value for nucleus sampling.
+        **kwargs: Additional keyword arguments.
+    
+    Returns:
+        AzureOpenAILLM: Azure OpenAI LLM instance.
+    """
+    additional_kwargs = {"top_p": top_p}
+    additional_kwargs |= kwargs
+    
+    logger.debug(f"Azure LLM Model: {model_name} | Deployment: {deployment_name} | Endpoint: {azure_endpoint}")
+    
+    return AzureOpenAILLM(
+        model=model_name,
+        deployment_name=deployment_name,
+        azure_endpoint=azure_endpoint,
+        api_key=api_key,
+        api_version=api_version,
+        context_window=context_window,
+        max_tokens=max_completion_tokens,
+        system_prompt=system_prompt,
+        temperature=temperature,
+        additional_kwargs=additional_kwargs,
+    )
 
 
 def get_llm(

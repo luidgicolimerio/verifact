@@ -6,6 +6,7 @@ from typing import Self
 from llama_index.core.llms import ChatMessage, ChatResponse, MessageRole
 from llama_index.llms.openai import OpenAI
 from pydantic import BaseModel, ConfigDict, Field
+from rag.llms.azure_openai import AzureOpenAILLM
 from rag.llms.openai_like import OpenAILike
 from rag.retry import RetryValueError, create_retry_decorator
 from utils import trimAndLoadJson
@@ -38,7 +39,7 @@ class LLMBaseModel(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    llm: OpenAILike | OpenAI | None = Field(
+    llm: OpenAILike | OpenAI | AzureOpenAILLM | None = Field(
         default=None, description="LLM model to use for generation.", exclude=True
     )
     num_workers: int = Field(
@@ -75,7 +76,7 @@ class LLMBaseModel(BaseModel):
     @classmethod
     def from_defaults(
         cls,
-        llm: OpenAILike | OpenAI | None = None,
+        llm: OpenAILike | OpenAI | AzureOpenAILLM | None = None,
         system_prompt_template: Callable[[], str] | str | None = default_system_prompt,
         retry_temperature_increment: float = 0.1,
         retry_temperature_max: float = 1.0,
@@ -101,7 +102,7 @@ class LLMBaseModel(BaseModel):
         response_format: BaseModel | None = None,
         validate_response_fn: Callable[[BaseModel], bool] | None = None,
         return_raw_response: bool = False,
-        llm: OpenAILike | OpenAI | None = None,
+        llm: OpenAILike | OpenAI | AzureOpenAILLM | None = None,
         llm_kwargs: dict = {},
         **kwargs,
     ) -> ChatResponse | BaseModel | str:
@@ -120,15 +121,19 @@ class LLMBaseModel(BaseModel):
             system_prompt = string_wrapper(system_prompt)
         llm.system_prompt = system_prompt or self.system_prompt_template()
         # Guided JSON using Outlines if Pydantic Model provided
+        chat_kwargs = {}
         if response_format:
-            if "extra_body" not in llm.additional_kwargs:
-                llm.additional_kwargs["extra_body"] = {}
-            llm.additional_kwargs["extra_body"] |= {
-                "guided_json": response_format.model_json_schema(),
-                "guided_whitespace_pattern": " ",
-            }
+            if isinstance(llm, AzureOpenAILLM):
+                chat_kwargs["response_format"] = {"type": "json_object"}
+            else:
+                if "extra_body" not in llm.additional_kwargs:
+                    llm.additional_kwargs["extra_body"] = {}
+                llm.additional_kwargs["extra_body"] |= {
+                    "guided_json": response_format.model_json_schema(),
+                    "guided_whitespace_pattern": " ",
+                }
         messages = [ChatMessage(role=MessageRole.USER, content=prompt(*args, **kwargs))]
-        response = llm.chat(messages=messages)
+        response = llm.chat(messages=messages, **chat_kwargs)
         # Check Response Finish Reason
         finish_reason = response.raw.choices[0].finish_reason
         if finish_reason == "stop":  # Regular completion
@@ -218,7 +223,7 @@ class LLMBaseModel(BaseModel):
         response_format: BaseModel | None = None,
         validate_response_fn: Callable[[BaseModel], bool] | None = None,
         return_raw_response: bool = False,
-        llm: OpenAILike | OpenAI | None = None,
+        llm: OpenAILike | OpenAI | AzureOpenAILLM | None = None,
         llm_kwargs: dict = {},
         **kwargs,
     ) -> Awaitable[ChatResponse | BaseModel | str]:
@@ -237,15 +242,19 @@ class LLMBaseModel(BaseModel):
             system_prompt = string_wrapper(system_prompt)
         llm.system_prompt = system_prompt or self.system_prompt_template()
         # Guided JSON using Outlines if Pydantic Model provided
+        chat_kwargs = {}
         if response_format:
-            if "extra_body" not in llm.additional_kwargs:
-                llm.additional_kwargs["extra_body"] = {}
-            llm.additional_kwargs["extra_body"] |= {
-                "guided_json": response_format.model_json_schema(),
-                "guided_whitespace_pattern": " ",
-            }
+            if isinstance(llm, AzureOpenAILLM):
+                chat_kwargs["response_format"] = {"type": "json_object"}
+            else:
+                if "extra_body" not in llm.additional_kwargs:
+                    llm.additional_kwargs["extra_body"] = {}
+                llm.additional_kwargs["extra_body"] |= {
+                    "guided_json": response_format.model_json_schema(),
+                    "guided_whitespace_pattern": " ",
+                }
         messages = [ChatMessage(role=MessageRole.USER, content=prompt(*args, **kwargs))]
-        response = await llm.achat(messages=messages)
+        response = await llm.achat(messages=messages, **chat_kwargs)
         # Check Response Finish Reason
         finish_reason = response.raw.choices[0].finish_reason
         if finish_reason == "stop":  # Regular completion
@@ -346,7 +355,7 @@ class LLM(LLMBaseModel):
         response_format: BaseModel | None = None,
         validate_response_fn: Callable[[BaseModel], bool] | None = None,
         return_raw_response: bool = False,
-        llm: OpenAILike | OpenAI | None = None,
+        llm: OpenAILike | OpenAI | AzureOpenAILLM | None = None,
         llm_kwargs: dict = {},
         **kwargs,
     ) -> str | BaseModel:
@@ -370,7 +379,7 @@ class LLM(LLMBaseModel):
         response_format: BaseModel | None = None,
         validate_response_fn: Callable[[BaseModel], bool] | None = None,
         return_raw_response: bool = False,
-        llm: OpenAILike | OpenAI | None = None,
+        llm: OpenAILike | OpenAI | AzureOpenAILLM | None = None,
         llm_kwargs: dict = {},
         **kwargs,
     ) -> str | BaseModel:
@@ -431,7 +440,7 @@ class LLM(LLMBaseModel):
         response_format: BaseModel | None = None,
         validate_response_fn: Callable[[BaseModel], bool] | None = None,
         return_raw_response: bool = False,
-        llm: OpenAILike | OpenAI | None = None,
+        llm: OpenAILike | OpenAI | AzureOpenAILLM | None = None,
         llm_kwargs: dict = {},
         **kwargs,
     ) -> Awaitable[str | BaseModel]:
