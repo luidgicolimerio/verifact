@@ -7,13 +7,27 @@ from collections.abc import Callable
 from qdrant_client import AsyncQdrantClient, QdrantClient
 
 from rag.components.models import get_embed_model
+from rag.embedding.dense_embedding import DenseEmbedding as DenseEmbeddingModel
 from rag.vector_stores import QdrantVectorStore, default_bge_m3_encoder
+from rag.vector_stores.qdrant import QueryEncoderCallable
 
 logger = logging.getLogger()
 
 
+def _is_dense_only() -> bool:
+    """Returns True when EMBED_TYPE env var is set to 'dense'."""
+    return os.environ.get("EMBED_TYPE", "m3").lower() == "dense"
+
+
+def _get_dense_encoder(embed_model: DenseEmbeddingModel) -> QueryEncoderCallable:
+    """Returns a query encoder callable compatible with dense-only models."""
+    def compute_vectors(texts: list[str]):
+        return embed_model.get_text_embeddings(texts)
+    return compute_vectors
+
+
 def get_vectorstore(
-    collection_name: str = "Collection",
+    collection_name: str | None = None,
     on_disk_payload: bool = True,
     location: str | None = None,
     port: int | None = None,
@@ -22,9 +36,9 @@ def get_vectorstore(
     upsert_batch_size: int = 100,
     query_batch_size: int = 10,
     num_query_workers: int = 16,
-    enable_hybrid: bool = True,
+    enable_hybrid: bool | None = None,
     enable_dense: bool = True,
-    enable_sparse: bool = True,
+    enable_sparse: bool | None = None,
     enable_colbert: bool = False,
     query_encoder_fn: Callable | None = None,
     timeout: float = 60.0,
@@ -81,9 +95,20 @@ def get_vectorstore(
     location = location or os.environ["QDRANT_HOST"]
     port = port or os.environ["QDRANT_HOST_PORT"]
     grpc_port = grpc_port or os.environ["QDRANT_GRPC_HOST_PORT"]
-    query_encoder_fn = query_encoder_fn or default_bge_m3_encoder(
-        embed_model=get_embed_model(timeout=timeout)
-    )
+    collection_name = collection_name or os.environ.get("QDRANT_COLLECTION_NAME", "Collection")
+
+    dense_only = _is_dense_only()
+    if enable_sparse is None:
+        enable_sparse = not dense_only
+    if enable_hybrid is None:
+        enable_hybrid = not dense_only
+
+    if query_encoder_fn is None:
+        embed_model = get_embed_model(timeout=timeout)
+        if dense_only:
+            query_encoder_fn = _get_dense_encoder(embed_model)
+        else:
+            query_encoder_fn = default_bge_m3_encoder(embed_model=embed_model)
     # Initialize Qdrant Client
     client = QdrantClient(
         location=location, port=port, grpc_port=grpc_port, prefer_grpc=prefer_grpc, timeout=timeout

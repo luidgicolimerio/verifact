@@ -5,7 +5,8 @@ import os
 
 from llama_index.core.schema import MetadataMode
 
-from rag.embedding import M3Embedding
+from rag.embedding.dense_embedding import DenseEmbedding
+from rag.embedding.m3_embedding import M3Embedding
 from rag.llms.azure_openai import AzureOpenAILLM
 from rag.llms.openai_like import OpenAILike
 from rag.postprocessor import M3Reranker
@@ -247,6 +248,17 @@ def get_aux_llm(
     )
 
 
+# Models that return only dense embeddings (not M3 multi-vector)
+DENSE_ONLY_MODELS = (
+    "thenlper/gte-large",
+    "MedAI-HS/med-gte-hybrid",
+    "BAAI/bge-base-en-v1.5",
+    "abhinand/MedEmbed-base-v0.1",
+    "nomic-ai/modernbert-embed-base",
+    "NeuML/bioclinical-modernbert-base-embeddings",
+)
+
+
 def get_embed_model(
     model_name: str | None = None,
     api_base: str | None = None,
@@ -258,7 +270,7 @@ def get_embed_model(
     metadata_mode: MetadataMode | str = MetadataMode.NONE,
     num_workers: int = 24,
     timeout: float | None = None,
-) -> M3Embedding:
+) -> M3Embedding | DenseEmbedding:
     """Get Embedding Model.
 
     This returns a class that makes API calls to the BGE-M3 embedding service,
@@ -303,9 +315,19 @@ def get_embed_model(
     api_base = api_base or os.environ["EMBED_URL_BASE"]
     logger.debug(
         f"Embed Model: {model_name} | API Base: {api_base} | Dense Name: {dense_name} | "
-        f"Sparse Name: {sparse_name} | Colbert Name: {colbert_name} | "
         f"Default Vector Name: {default_vector_name}"
     )
+    if model_name in DENSE_ONLY_MODELS:
+        return DenseEmbedding(
+            model_name=model_name,
+            api_base=api_base,
+            embed_batch_size=embed_batch_size,
+            dense_name=dense_name,
+            default_vector_name=default_vector_name,
+            metadata_mode=metadata_mode,
+            num_workers=num_workers,
+            timeout=timeout,
+        )
     return M3Embedding(
         model_name=model_name,
         api_base=api_base,

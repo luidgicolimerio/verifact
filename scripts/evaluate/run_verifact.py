@@ -208,7 +208,7 @@ def main(
     retrieval_method: Annotated[
         list[str],
         typer.Option(help=f"Retrieval method: {DENSE}, {SPARSE}, {HYBRID}, {RERANK}."),
-    ] = [DENSE, SPARSE, HYBRID, RERANK],
+    ] = [DENSE, RERANK],
     top_n: Annotated[list[int], typer.Option(help="Number of top results to consider.")] = [
         5,
         10,
@@ -283,6 +283,7 @@ def main(
         raise FileNotFoundError(f"Propositions file not found: {propositions_filepath}")
     try:
         admissions_df = load_pandas(admissions_filepath)
+        admissions_df.columns = admissions_df.columns.str.upper()
     except FileNotFoundError:
         raise FileNotFoundError(f"Admissions file not found: {admissions_filepath}")
 

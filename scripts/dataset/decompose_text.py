@@ -18,7 +18,7 @@
 import asyncio
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import typer
@@ -66,7 +66,7 @@ class DocumentResult:
     document_nodes: list[Document]
     sentence_nodes: list[TextNode]
     semantic_nodes: list[TextNode]
-    claim_nodes: list[TextNode]
+    claim_nodes: list[TextNode] = field(default_factory=list)
 
     def __str__(self) -> str:
         return (
@@ -204,31 +204,31 @@ def build_nodes_from_document(
         logger.debug(f"Num Sentence Nodes: {len(sentence_nodes)}")
 
         # Semantic Nodes --> Atomic Claim Nodes
-        loop = asyncio.get_event_loop()
-        from rag.components import get_azure_llm
-        llm = get_azure_llm(temperature=llm_temperature)
-        atomic_claim_node_parser: AtomicClaimNodeParser = get_atomic_claim_node_parser(
-            num_workers=llm_n_jobs, llm=llm
-        )
-        claim_nodes = loop.run_until_complete(
-            atomic_claim_node_parser.acall(semantic_nodes, show_progress=show_progress)
-        )
-        claim_nodes = sorted(claim_nodes, key=lambda x: x.metadata["created_at"])
-        claim_nodes = embed_model(claim_nodes, show_progress=show_progress)
-        logger.debug("Num Claim Nodes: ", len(claim_nodes))
+        # loop = asyncio.get_event_loop()
+        # from rag.components import get_azure_llm
+        # llm = get_azure_llm(temperature=llm_temperature)
+        # atomic_claim_node_parser: AtomicClaimNodeParser = get_atomic_claim_node_parser(
+        #     num_workers=llm_n_jobs, llm=llm
+        # )
+        # claim_nodes = loop.run_until_complete(
+        #     atomic_claim_node_parser.acall(semantic_nodes, show_progress=show_progress)
+        # )
+        # claim_nodes = sorted(claim_nodes, key=lambda x: x.metadata["created_at"])
+        # claim_nodes = embed_model(claim_nodes, show_progress=show_progress)
+        # logger.debug("Num Claim Nodes: ", len(claim_nodes))
 
         # Upsert Parsed Nodes
         if upsert_db:
             vs.add(sentence_nodes)
             vs.add(semantic_nodes)
-            vs.add(claim_nodes)
+            # vs.add(claim_nodes)
             vs.add([document])  # Upsert Original Note Text w/o Embeddings
 
         return DocumentResult(
             document_nodes=[document],
             sentence_nodes=sentence_nodes,
             semantic_nodes=semantic_nodes,
-            claim_nodes=claim_nodes,
+            # claim_nodes=claim_nodes,
         )
 
 
@@ -239,7 +239,7 @@ def main(
         help="Filename for input notes dataframe (.csv, .feather, or .parquet)",
     ),
     upsert_db: bool = typer.Option(default=True, help="Whether to upsert nodes into Vectorstore."),
-    collection_name: str = typer.Option(default="default", help="Name of Vectorstore collection."),
+    collection_name: str = typer.Option(default=None, help="Name of Vectorstore collection. Defaults to QDRANT_COLLECTION_NAME env var."),
     save_pickle: bool = typer.Option(default=False, help="Whether to save nodes as pickle files."),
     output_dir_name: str = typer.Option(
         default="output", help="Name of directory to save pickle files."

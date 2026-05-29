@@ -12,10 +12,10 @@ from rag.schema import EmbeddingItem
 # be dense (list of float) or it can be sparse (dict with token indices and lexical weight values),
 # or it can be `None`, which means we disable the embedding or don't generate that embedding.
 # The NamedEmbedding format is similar to qdrant's named vectors.
-DenseEmbedding: TypeAlias = list[float]
+DenseEmbeddingVector: TypeAlias = list[float]
 SparseEmbedding: TypeAlias = dict[int, float]
 NamedEmbedding: TypeAlias = (
-    DenseEmbedding | dict[str, EmbeddingItem | DenseEmbedding | SparseEmbedding | None]
+    DenseEmbeddingVector | dict[str, EmbeddingItem | DenseEmbeddingVector | SparseEmbedding | None]
 )
 
 
@@ -36,7 +36,7 @@ def unpack_embedding(embedding: NamedEmbedding) -> list[FlatEmbedding]:
             if isinstance(value, EmbeddingItem):
                 item = FlatEmbedding(name=value.name, kind=value.kind, value=value.embedding)
                 unpacked_embeddings.append(item)
-            elif isinstance(value, DenseEmbedding):
+            elif isinstance(value, list):
                 item = FlatEmbedding(name=key, kind="dense", value=value)
                 unpacked_embeddings.append(item)
             elif isinstance(value, SparseEmbedding):
@@ -66,7 +66,7 @@ def unpack_embeddings(embeddings: list[NamedEmbedding]) -> list[FlatEmbedding]:
     return unpacked_embeddings
 
 
-def mean_agg_dense(embeddings: list[DenseEmbedding]) -> DenseEmbedding:
+def mean_agg_dense(embeddings: list[DenseEmbeddingVector]) -> DenseEmbeddingVector:
     "Aggregates many dense embeddings into one."
     return list(np.array(embeddings).mean(axis=0))
 

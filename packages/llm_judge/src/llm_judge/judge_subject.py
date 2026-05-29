@@ -19,7 +19,7 @@ from rag import (
     SENTENCE_NODE,
     SPARSE,
 )
-from rag.components import get_aux_llm, get_llm
+from rag.components import get_aux_llm, get_azure_llm
 from rag.vector_stores.qdrant import QdrantVectorStore
 from utils import LazyFileLogger, load_pickle, save_pickle
 
@@ -189,7 +189,9 @@ class JudgeSingleSubject(BaseModel):
 
         # Default Vectorstore Collection
         reference_collection_name = (
-            reference_collection_name or os.environ["MIMIC3_EHR_COLLECTION_NAME"]
+            reference_collection_name
+            or os.environ.get("QDRANT_COLLECTION_NAME")
+            or os.environ["MIMIC3_EHR_COLLECTION_NAME"]
         )
 
         # Subset Propositions Dataframe to specific subject_id or hadm_id
@@ -206,8 +208,11 @@ class JudgeSingleSubject(BaseModel):
         if admission_df is None and hadm_start is None and hadm_end is None:
             raise ValueError("Must provide either `admission_df` or `hadm_start` and `hadm_end`.")
         if admission_df is not None and "SUBJECT_ID" in admission_df.columns:
-            hadm_start = admission_df.query(f"SUBJECT_ID == {subject_id}").ADMITTIME.iloc[0]
-            hadm_end = admission_df.query(f"SUBJECT_ID == {subject_id}").DISCHTIME.iloc[0]
+            adm_row = admission_df.query(f"SUBJECT_ID == {subject_id}")
+            if adm_row.empty:
+                raise ValueError(f"Subject ID {subject_id} not found in admission_df.")
+            hadm_start = adm_row.ADMITTIME.iloc[0]
+            hadm_end = adm_row.DISCHTIME.iloc[0]
 
         # Format Timestamps
         if isinstance(hadm_start, str):
@@ -237,7 +242,9 @@ class JudgeSingleSubject(BaseModel):
                     use_rerank = False
                     top_k = top_n
                 case const.RERANK:
-                    query_mode = "hybrid"
+                    # Use hybrid if sparse is available, otherwise dense
+                    dense_only = os.environ.get("EMBED_TYPE", "m3").lower() == "dense"
+                    query_mode = "dense" if dense_only else "hybrid"
                     use_rerank = True
                     top_k = top_n
                 case _:
@@ -265,7 +272,7 @@ class JudgeSingleSubject(BaseModel):
         )
 
         # Create Judge
-        llm = get_llm(temperature=temperature, top_p=top_p)
+        llm = get_azure_llm(temperature=temperature, top_p=top_p)
         aux_llm = get_aux_llm(temperature=temperature, top_p=top_p) if is_reasoning_model else None
         judge = Judge.from_defaults(
             llm=llm,
@@ -326,6 +333,8 @@ class JudgeSingleSubject(BaseModel):
         self.rcm.logger = None
         self.rcm.vector_store = None
         self.judge.logger = None
+        self.judge.llm = None
+        self.judge.aux_llm = None
 
     def setup_logger_and_vectorstore(
         self,
@@ -334,6 +343,8 @@ class JudgeSingleSubject(BaseModel):
         vectorstore: QdrantVectorStore | None = None,
         collection_name: str = None,
         timeout: int = 300,
+        temperature: float = 0.1,
+        top_p: float = 1.0,
     ) -> LazyFileLogger:
         log_file = log_file or self.log_filepath
         Path(log_file).parent.mkdir(parents=True, exist_ok=True)
@@ -342,6 +353,16 @@ class JudgeSingleSubject(BaseModel):
         self.rcm.setup_vectorstore(
             vectorstore=vectorstore, collection_name=collection_name, timeout=timeout
         )
+        # Recreate LLM (removed before serialization due to unpicklable _thread.RLock)
+        if self.judge.llm is None:
+            from rag.components import get_azure_llm
+            from llm_judge.judge import Judge
+            llm = get_azure_llm(temperature=temperature, top_p=top_p)
+            self.judge.llm = Judge.from_defaults(
+                llm=llm,
+                num_workers=self.judge.num_workers,
+                num_invalid_output_retries=self.judge.num_invalid_output_retries,
+            ).llm
         self.judge.setup_logger(level=level, log_file=log_file)
         return self.logger
 
@@ -379,15 +400,19 @@ class JudgeSingleSubject(BaseModel):
 
     def save(self, save_dir: str | Path | None = None, omit_input_data: bool = True) -> None:
         """Serialize JudgeSingleSubject object to a file."""
-        # Remove logger and vectorstore before saving
+        # Remove logger, vectorstore, and LLM before saving
         self.remove_logger_and_vectorstore()
-        obj: Self = deepcopy(self)
-        # Remove Input Data to reduce file size
+        # Temporarily stash fields that should be omitted or can't be pickled
+        stash = {}
         if omit_input_data:
-            obj.proposition_df = None
-        # Save Judge object to file
+            stash["proposition_df"] = self.proposition_df
+            self.proposition_df = None
+        # Save directly without deepcopy (avoids _thread.RLock pickling issues)
         filepath = self.get_judge_save_filepath(save_dir=save_dir)
-        save_pickle(obj=obj, filepath=filepath)
+        save_pickle(obj=self, filepath=filepath)
+        # Restore stashed fields
+        for k, v in stash.items():
+            setattr(self, k, v)
 
     def evaluate(
         self,

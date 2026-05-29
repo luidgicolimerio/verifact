@@ -281,7 +281,10 @@ class JudgeCohort(BaseModel):
             judges = self.judges
         kwargs = {}
         if collection_name is None:
-            collection_name = os.environ["MIMIC3_EHR_COLLECTION_NAME"]
+            collection_name = (
+                os.environ.get("QDRANT_COLLECTION_NAME")
+                or os.environ["MIMIC3_EHR_COLLECTION_NAME"]
+            )
             kwargs["vector_store"] = get_vectorstore(
                 collection_name=collection_name, timeout=timeout
             )

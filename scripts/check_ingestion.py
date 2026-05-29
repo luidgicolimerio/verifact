@@ -13,7 +13,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models as rest
 
 QDRANT_URL = "http://localhost:6333"
-COLLECTION = "ehr_noteevents"
+COLLECTION = "ehr_bge_base"
 CSV_PATH = "/home/lcolimerio/workspace/verifact/data/ehr_noteevents.csv.gz"
 
 
