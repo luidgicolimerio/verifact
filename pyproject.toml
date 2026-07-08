@@ -35,6 +35,7 @@ dependencies = [
     "types-tqdm>=4.67.0.20241119",
     "apprise>=1.9.2",
     "adjusttext>=1.3.0",
+    "langfuse>=2.0.0",
 ]
 
 [tool.uv]

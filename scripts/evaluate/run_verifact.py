@@ -64,6 +64,8 @@ def evaluate_judge(
             logger.info(f"Skipping existing judge: {judge_config_str}. File: {filepath}")
             judge = JudgeSingleSubject.load(filepath=filepath)
             score_report = judge.score_report
+            if save_results:
+                judge.save_score_report()
             return score_report
         # Judge does not exist on disk.  Evaluate & save to disk.
         else:
@@ -118,6 +120,8 @@ def gather_score_reports(score_reports_dir: str = "") -> pd.DataFrame:
             | JudgeConfig.from_config_str(filepath.stem).model_dump()
             | ScoreReport.load(filepath).model_dump()
         )
+    if not score_reports:
+        return pd.DataFrame()
     score_report_df = pd.DataFrame(score_reports).drop(
         columns=[
             "default_temperature",
@@ -127,7 +131,8 @@ def gather_score_reports(score_reports_dir: str = "") -> pd.DataFrame:
             "num_invalid_output_retries",
             "system_prompt_template",
             "judge_config",
-        ]
+        ],
+        errors="ignore",
     )
     return score_report_df
 
@@ -142,6 +147,8 @@ def score_report_to_verdicts(score_report_df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: DataFrame containing Proposition Verdicts.
     """
+    if score_report_df.empty:
+        return pd.DataFrame()
     # Explode ScoreReport dataframe so that each row is a single Proposition Verdict
     verdicts_df = score_report_df.loc[
         :,

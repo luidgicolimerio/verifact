@@ -201,10 +201,10 @@ class QdrantVectorStore(BasePydanticVectorStore):
             enable_hybrid = True
 
         # Setup hybrid search if enabled
+        self._query_encoder_fn = query_encoder_fn or default_bge_m3_encoder()
         if enable_hybrid:
             # Query Encoder Fn is a function that returns both sparse and dense
             # encoder representations as dict[str, Any]
-            self._query_encoder_fn = query_encoder_fn or default_bge_m3_encoder()
             default_fusion_fn = partial(distribution_based_score_fusion, save_score=True)
             self._fusion_fn = fusion_fn or cast(FusionCallable, default_fusion_fn)
 

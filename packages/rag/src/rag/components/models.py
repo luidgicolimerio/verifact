@@ -317,7 +317,8 @@ def get_embed_model(
         f"Embed Model: {model_name} | API Base: {api_base} | Dense Name: {dense_name} | "
         f"Default Vector Name: {default_vector_name}"
     )
-    if model_name in DENSE_ONLY_MODELS:
+    dense_only = os.environ.get("EMBED_TYPE", "m3").lower() == "dense"
+    if model_name in DENSE_ONLY_MODELS or dense_only:
         return DenseEmbedding(
             model_name=model_name,
             api_base=api_base,
