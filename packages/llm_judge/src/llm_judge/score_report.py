@@ -95,7 +95,10 @@ class ScoreReport(LLMBaseModel):
         )
         # Generate Explanations
         if obj and include_explanations:
-            obj = obj.generate_explanations()
+            try:
+                obj = obj.generate_explanations()
+            except Exception as e:
+                warnings.warn(f"Failed to generate explanations: {e}. Returning ScoreReport without explanations.")
         return obj
 
     @classmethod
@@ -121,7 +124,10 @@ class ScoreReport(LLMBaseModel):
             judge_config=judge_config,
         )
         if obj and include_explanations:
-            obj = await obj.a_generate_explanations()
+            try:
+                obj = await obj.a_generate_explanations()
+            except Exception as e:
+                warnings.warn(f"Failed to generate explanations: {e}. Returning ScoreReport without explanations.")
         return obj
 
     @classmethod
@@ -137,6 +143,14 @@ class ScoreReport(LLMBaseModel):
     ) -> "ScoreReport":
         if not verdicts:
             warnings.warn("No verdicts provided. Returning `None` object.")
+            return None
+        # Filter out None verdicts (e.g. from content_filter blocks or exhausted retries)
+        none_count = sum(1 for v in verdicts if v is None)
+        if none_count:
+            warnings.warn(f"{none_count} verdict(s) were None (likely content_filter or retry exhaustion) and will be skipped.")
+        verdicts = [v for v in verdicts if v is not None]
+        if not verdicts:
+            warnings.warn("All verdicts were None. Returning `None` object.")
             return None
         # Sort verdicts into categories
         supported, not_supported, not_addressed = [], [], []

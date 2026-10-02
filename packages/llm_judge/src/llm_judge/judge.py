@@ -1,4 +1,5 @@
 import logging
+import re
 from collections.abc import Awaitable
 from pathlib import Path
 from typing import Self
@@ -382,6 +383,21 @@ class Judge(BaseModel):
                     self.logger.critical(log_str)
         return obj
 
+    @staticmethod
+    def _extract_reasoning_and_answer(message: ChatCompletionMessage) -> tuple[str, str]:
+        """Extracts reasoning chain and final answer from a ChatCompletionMessage.
+        Supports both DeepSeek-style `reasoning_content` field and
+        inline <think>...</think> tags embedded in `content`."""
+        reasoning_chain: str = getattr(message, "reasoning_content", None) or ""
+        content: str = message.content or ""
+        # Fallback: extract <think>...</think> block from content
+        if not reasoning_chain and "<think>" in content:
+            match = re.search(r"<think>(.*?)</think>", content, re.DOTALL)
+            if match:
+                reasoning_chain = match.group(1).strip()
+                content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+        return reasoning_chain, content
+
     def _determine_reasoning_verdict(
         self,
         text: str,
@@ -405,8 +421,7 @@ class Judge(BaseModel):
                 )
                 chat_completion: ChatCompletion = response.raw
                 message: ChatCompletionMessage = chat_completion.choices[0].message
-                reasoning_chain: str = message.reasoning_content
-                reasoning_final_answer: str = message.content
+                reasoning_chain, reasoning_final_answer = self._extract_reasoning_and_answer(message)
                 # Make sure we have both content and reasoning_chain.
                 if not reasoning_chain:
                     raise ValueError("No `reasoning_chain` found in response.")
@@ -476,8 +491,7 @@ class Judge(BaseModel):
                 )
                 chat_completion: ChatCompletion = response.raw
                 message: ChatCompletionMessage = chat_completion.choices[0].message
-                reasoning_chain: str = message.reasoning_content
-                reasoning_final_answer: str = message.content
+                reasoning_chain, reasoning_final_answer = self._extract_reasoning_and_answer(message)
                 # Make sure we have both content and reasoning_chain.
                 if not reasoning_chain:
                     raise ValueError("No `reasoning_chain` found in response.")

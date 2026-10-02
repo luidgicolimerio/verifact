@@ -21,7 +21,7 @@ class DenseEmbedding(BaseEmbedding):
 
     model_name: str = Field(default="BAAI/bge-base-en-v1.5", description="Model name.")
     embed_batch_size: int = Field(default=50, description="Embedding batch size.", gt=0)
-    api_base: str = Field(default="http://embed.localhost/v1", description="API base URL.")
+    api_base: str = Field(default="http://embed.localhost", description="API base URL.")
     dense_name: str = Field(default="dense", description="Vector name key for dense embeddings.")
     default_vector_name: str = Field(default="dense", description="Default vector name.")
     timeout: float | None = Field(default=600.0, description="Timeout for API calls.")
@@ -42,12 +42,15 @@ class DenseEmbedding(BaseEmbedding):
         if num_retries == 0:
             raise ConnectionError(f"Failed to generate embeddings after {self.num_retries} retries.")
 
-        response = httpx.request(
-            method="POST",
-            url=self.api_base.rstrip("/") + "/embeddings",
-            json={"input": sentences, "model": self.model_name},
-            timeout=self.timeout,
-        )
+        try:
+            response = httpx.request(
+                method="POST",
+                url=self.api_base.rstrip("/") + "/v1/embeddings",
+                json={"input": sentences, "model": self.model_name},
+                timeout=self.timeout,
+            )
+        except httpx.TransportError:
+            return self._embed(sentences, num_retries=num_retries - 1)
 
         if response.is_success:
             payload_list = response.json()["data"]

@@ -20,8 +20,8 @@ DEFAULT_SYSTEM_PROMPT = (
 
 
 def get_azure_llm(
-    model_name: str = "gpt-4o-mini",
-    deployment_name: str = "gpt-4o-mini",
+    model_name: str | None = None,
+    deployment_name: str | None = None,
     azure_endpoint: str | None = None,
     api_key: str | None = None,
     api_version: str = "2024-12-01-preview",
@@ -53,6 +53,9 @@ def get_azure_llm(
     additional_kwargs = {"top_p": top_p}
     additional_kwargs |= kwargs
     
+    model_name = model_name or os.environ.get("AZURE_MODEL_NAME", "gpt-4o-mini")
+    deployment_name = deployment_name or os.environ.get("AZURE_DEPLOYMENT_NAME", model_name)
+
     logger.debug(f"Azure LLM Model: {model_name} | Deployment: {deployment_name} | Endpoint: {azure_endpoint}")
     
     return AzureOpenAILLM(

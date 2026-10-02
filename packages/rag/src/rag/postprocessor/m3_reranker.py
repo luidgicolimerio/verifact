@@ -23,7 +23,7 @@ class M3Reranker(BaseNodePostprocessor):
     model_name: str = Field(
         default="BAAI/bge-reranker-v2-m3", description="BAAI Reranker model name."
     )
-    api_base: str = Field(default="http://rerank.localhost/v1", description="API base URL.")
+    api_base: str = Field(default="http://rerank.localhost", description="API base URL.")
     top_n: int | None = Field(
         default=None,
         description="Number of nodes to return sorted by score. "
